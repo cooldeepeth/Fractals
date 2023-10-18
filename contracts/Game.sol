@@ -52,8 +52,7 @@ contract Game{
         return counter;
     }
 
-    function buy(uint id, uint fid) external payable returns(bool){
-        require(!_isExist[id],"Id exist");    
+    function buy(uint id, uint fid) external payable returns(bool){    
         require(!isLocked[id][fid],"Cannot Buy Locked By Owner");
         require(fid <= 8, "FID not Exist");
 
