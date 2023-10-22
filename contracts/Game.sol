@@ -51,12 +51,12 @@ contract Game{
         _;
     }
 
-    function createNFT(uint256[] calldata price, bytes calldata data)external payable{
+    function createNFT(uint256[] calldata price, string calldata data)external payable{
         
         require(price.length == 9,"Only 9 price can be assigned");
         require(msg.value== getPrice(price) ,"Price is Less use helper function");
         
-        uint id = fnft.createNFT(msg.sender, data);
+        uint id = fnft.createNFT(msg.sender, bytes(data));
         unchecked{
             for (uint8 i = 0; i <= 8; i++){
                 _priceOf[id][i] = price[i];
@@ -93,7 +93,7 @@ contract Game{
     function purchaseFraction(address to, uint tokenId, uint8 fid) payable external _isExist(tokenId) _isFIDExist(fid){                
         require(_isForSale[tokenId],"Not For Sale");
         require(!_isLocked[tokenId][fid],"Locked");
-        require(to!= address(0),"Receiver cannot be 0 address");
+        require(to == msg.sender,"Receiver cannot be 0 address");
         
         uint _price = _priceOf[tokenId][fid];
         require(msg.value == _price,"Price is not same");
