@@ -1,26 +1,22 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.21;
+pragma solidity >=0.8.21 <0.9.0;
 
-// import "./MyNFT.sol";
 import "./MyFNFT.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract Game{
-    
     event CREATED(uint256 id, address Owner);
     event BOUGHT(uint256 id, uint256 fid, uint256 Price, address Owner);
     event SETTED(uint256 id, uint256 fid, uint256 Price, address Owner);
     event SUBMITED(uint256 id, uint256 reward, address Collector);
     
-    FNFT private immutable fnft;
-    IERC721 private nft;
+    FNFT private fnft;
     uint8 public immutable fee;
-    address public immutable Organizer;
+    address payable immutable Organizer;
     
     constructor(uint8 _fee, address _fnft){
         fee =_fee;
         fnft = FNFT(_fnft);
-        Organizer = msg.sender;
+        Organizer = payable(msg.sender);
     }
 
     receive() external payable {
@@ -62,23 +58,40 @@ contract Game{
         
         uint id = fnft.createNFT(msg.sender, data);
         unchecked{
-            for (uint8 i = 0; i <= 8; i++) 
-            {
+            for (uint8 i = 0; i <= 8; i++){
                 _priceOf[id][i] = price[i];
-                fnft.approve(id, i, address(this));
+                fnft.approve(msg.sender,id, i, address(this));
+                _isLocked[id][i] = true;
             }
         }
+
         emit CREATED(id, msg.sender);
     }
 
+    function deleteNft(uint tokenId) external _isExist(tokenId){
+        require(msg.sender == fnft.isMinter(tokenId),"Not authorized");
+        require(!_isForSale[tokenId],"Given is On sale lock it ");
+        require(fnft._balanceOf(msg.sender, tokenId) == 9,"First Collect All FNFTs");
+        
+        address owner = fnft.isMinter(tokenId);
+        fnft.unfractionalize(owner, tokenId);
+    }
+    
     function putOnSale(uint tokenId) external _isExist(tokenId){        
         require(!_isForSale[tokenId],"Already For Sale");
         require(msg.sender == fnft.isMinter(tokenId),"Not Owner");
-        _isForSale[tokenId] = true;        
+        _isForSale[tokenId] = true;
+        
+        unchecked{
+            for (uint8 i = 0; i<9; i++) 
+            {
+                _isLocked[tokenId][i] = false;
+            }
+        }
+
     }
 
-    function purchaseFraction(address to, uint tokenId, uint8 fid) payable external _isExist(tokenId) _isFIDExist(fid){
-                
+    function purchaseFraction(address to, uint tokenId, uint8 fid) payable external _isExist(tokenId) _isFIDExist(fid){                
         require(_isForSale[tokenId],"Not For Sale");
         require(!_isLocked[tokenId][fid],"Locked");
         require(to!= address(0),"Receiver cannot be 0 address");
@@ -92,51 +105,42 @@ contract Game{
 
         fnft.transferFNFT(owner, to, tokenId, fid);
         _isLocked[tokenId][fid] = true;
-                 
+
         emit BOUGHT(tokenId, fid, _price, msg.sender);
     }
-    
+
     function bid(uint tokenId, uint8 fid, uint price)external _isExist(tokenId) _isFIDExist(fid){
-        require(price != 0,"Price can't be zero");
+        require(price >0,"Price can't be zero");
         require(msg.sender == fnft._ownerOf(tokenId, fid),"Not authorized");
+        require(_isLocked[tokenId][fid],"Already Bidded");
+
+        fnft.approve(msg.sender, tokenId, fid, address(this));
 
         _priceOf[tokenId][fid] = price;
         _isLocked[tokenId][fid] = false;
-    }
-    
-    function unLock(uint tokenId, uint8 fid)external _isExist(tokenId) _isFIDExist(fid) {
-        require(fnft._ownerOf(tokenId,fid) == msg.sender,"Not Owner");
         
-        require(_isLocked[tokenId][fid],"Fid is not locked");
-        
-        _isLocked[tokenId][fid] = false;
+        emit SETTED(tokenId, fid, price, msg.sender);
     }
 
-    function setPrice(uint256 tokenId, uint8 fid, uint _price) external _isExist(tokenId) _isFIDExist(fid) {
-        require(fnft._ownerOf(tokenId, fid) == msg.sender,"Not owner");
-        require(_price != 0,"Price cant be 0");
-
-        _priceOf[tokenId][fid]= _price;
-        emit SETTED(tokenId, fid, _price, msg.sender);
-    }
-    
-    function submitFnfts(uint256 tokenId)external payable _isExist(tokenId) returns(address){
+    function submitCollection(uint256 tokenId)external payable _isExist(tokenId) returns(address){
         require(!isCollected[tokenId],"Reward Already Collected");
-        require(payable(msg.sender) != fnft.isMinter(tokenId),"Minter can't submit");
+        address minter = fnft.isMinter(tokenId);
+        require(payable(msg.sender) != minter,"Minter can't submit");
         require(fnft._balanceOf(msg.sender,tokenId) == 9,"Not enough FNFT's owned to collect Reward");
 
         address payable receiver = payable(msg.sender);
         (bool success, ) = receiver.call{value:1 ether}("");
         require(success,"Tx Failed!");
 
-        //Unfractionalize and sent to winner
-        // fnft.unfractionalize(tokenId);
+        
+        fnft.unfractionalize(msg.sender,tokenId);
+        fnft.safeTransferFrom(minter, msg.sender, tokenId, 1, "");
         
         isCollected[tokenId] = true;
         emit SUBMITED(tokenId,1,msg.sender);
-        return fnft.isMinter(tokenId);
+        return minter;
     }
-    
+
     function getPrice(uint256[] calldata price) public view returns(uint){
         uint _price;
         unchecked{
@@ -148,5 +152,9 @@ contract Game{
         uint _fee = (_price * fee)/100;
         return (_price + _fee);
     }
-
+    function getFractionPrice(uint tokenId, uint8 fid)external view returns(uint256){
+        uint _price = _priceOf[tokenId][fid];
+        uint _fee = (_price * fee)/100;
+        return (_price + _fee);
+    }
 }
