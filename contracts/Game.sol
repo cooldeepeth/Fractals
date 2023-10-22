@@ -24,7 +24,7 @@ contract Game{
     }
 
     function withdraw() external payable { 
-        require(msg.sender == Organizer,"");
+        require(msg.sender == Organizer,"Not Authorized");
         (bool success,) = Organizer.call{value:address(this).balance}("");
         require(success,"Tx Failed");
     }
@@ -64,13 +64,12 @@ contract Game{
                 _isLocked[id][i] = true;
             }
         }
-
         emit CREATED(id, msg.sender);
     }
 
     function deleteNft(uint tokenId) external _isExist(tokenId){
         require(msg.sender == fnft.isMinter(tokenId),"Not authorized");
-        require(!_isForSale[tokenId],"Given is On sale lock it ");
+        require(!_isForSale[tokenId],"Given NFT ID is On sale Lock it or Given NFT ID's fraction are sold");
         require(fnft._balanceOf(msg.sender, tokenId) == 9,"First Collect All FNFTs");
         
         address owner = fnft.isMinter(tokenId);
@@ -104,6 +103,7 @@ contract Game{
         require(success,"Tx Failed");
 
         fnft.transferFNFT(owner, to, tokenId, fid);
+        fnft.approve(msg.sender, tokenId, fid, address(this));
         _isLocked[tokenId][fid] = true;
 
         emit BOUGHT(tokenId, fid, _price, msg.sender);
