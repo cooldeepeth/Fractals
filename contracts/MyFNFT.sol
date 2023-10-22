@@ -35,7 +35,9 @@ contract FNFT is ERC1155 {
         _mint(to, tokenId, 1, data);
         _setApprovalForAll(to, msg.sender, true);
         fractionalize(to,tokenId,data,msg.sender);
-
+        _setURI(string(data));
+        
+        
         _isExist[tokenId] = true;
         _isInitialized[tokenId] = true;
         
