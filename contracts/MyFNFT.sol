@@ -27,7 +27,7 @@ contract FNFT is ERC1155 {
         require(_isExist[id],"id Does not exist");
         _;
     }
-    
+
     function createNFT(address to, bytes calldata data) external returns(uint){
         uint tokenId = counter + 1;
         require(!_isExist[tokenId],"ID exist");
